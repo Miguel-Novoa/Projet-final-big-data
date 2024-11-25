@@ -1,0 +1,75 @@
+services:
+  # Service Hadoop (Namenode + Datanode)
+  hadoop-namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: hadoop-namenode
+    ports:
+      - "9870:9870"  # Web UI
+      - "9000:9000"  # HDFS access
+    environment:
+      - CLUSTER_NAME=test
+    volumes:
+      - namenode_data:/hadoop/dfs/namenode
+    networks:
+      - bigdata_network
+
+  hadoop-datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: hadoop-datanode
+    environment:
+      - CLUSTER_NAME=test
+      - CORE_CONF_fs_defaultFS=hdfs://hadoop-namenode:9000
+    volumes:
+      - datanode_data:/hadoop/dfs/datanode
+    depends_on:
+      - hadoop-namenode
+    networks:
+      - bigdata_network
+
+  # Service PostgreSQL
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bigdata_network
+
+  # Service Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "xpack.security.enabled=false" # Désactiver la sécurité pour simplifier le développement
+    ports:
+      - "9200:9200"  # API Elasticsearch
+      - "9300:9300"  # Node communication
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com  # Email de connexion à pgAdmin
+      PGADMIN_DEFAULT_PASSWORD: admin          # Mot de passe de connexion
+    ports:
+      - "5050:80"  # Accès à pgAdmin via localhost:5050
+    depends_on:
+      - postgres
+    networks:
+      - bigdata_network
+
+
+networks:
+  bigdata_network:
+
+volumes:
+  namenode_data:
+  datanode_data:
+  postgres_data:
