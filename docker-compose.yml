@@ -1,31 +1,107 @@
 services:
-  # Service Hadoop (Namenode + Datanode)
-  hadoop-namenode:
-    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
-    container_name: hadoop-namenode
+  namenode:
+    build:
+      context: ./namenode
+    container_name: namenode
+    hostname: namenode
     ports:
-      - "9870:9870"  # Web UI
-      - "9000:9000"  # HDFS access
-    environment:
-      - CLUSTER_NAME=test
+      - "9870:9870"  # Hadoop NameNode Web UI
+      - "8088:8088"  # Hadoop ResourceManager Web UI
     volumes:
-      - namenode_data:/hadoop/dfs/namenode
+      - namenode_data:/hadoopdata
+    environment:
+      - HDFS_NAMENODE_USER=root
+      - HDFS_DATANODE_USER=root
+      - HDFS_SECONDARYNAMENODE_USER=root
+      - YARN_RESOURCEMANAGER_USER=root
+      - YARN_NODEMANAGER_USER=root
+    entrypoint: ["/entrypoint.sh"]
     networks:
-      - bigdata_network
+      - hadoop-net
 
-  hadoop-datanode:
-    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
-    container_name: hadoop-datanode
-    environment:
-      - CLUSTER_NAME=test
-      - CORE_CONF_fs_defaultFS=hdfs://hadoop-namenode:9000
-    volumes:
-      - datanode_data:/hadoop/dfs/datanode
+  datanode1:
+    build:
+      context: ./datanode
+    container_name: datanode1
+    hostname: datanode1
     depends_on:
-      - hadoop-namenode
+      - namenode
+    volumes:
+      - datanode1_data:/hadoopdata
+    environment:
+      - HDFS_NAMENODE_USER=root
+      - HDFS_DATANODE_USER=root
+      - HDFS_SECONDARYNAMENODE_USER=root
+      - YARN_RESOURCEMANAGER_USER=root
+      - YARN_NODEMANAGER_USER=root
+    entrypoint: ["/entrypoint.sh"]
     networks:
-      - bigdata_network
+      - hadoop-net
 
+  datanode2:
+    build:
+      context: ./datanode
+    container_name: datanode2
+    hostname: datanode2
+    depends_on:
+      - namenode
+    volumes:
+      - datanode2_data:/hadoopdata
+    environment:
+      - HDFS_NAMENODE_USER=root
+      - HDFS_DATANODE_USER=root
+      - HDFS_SECONDARYNAMENODE_USER=root
+      - YARN_RESOURCEMANAGER_USER=root
+      - YARN_NODEMANAGER_USER=root
+    entrypoint: ["/entrypoint.sh"]
+    networks:
+      - hadoop-net
+
+  spark:
+    build:
+      context: ./spark
+    container_name: spark-master
+    hostname: spark-master
+    depends_on:
+      - namenode
+      - datanode1
+      - datanode2
+      - elasticsearch
+    ports:
+      - "8080:8080"  # Spark Master Web UI
+      - "7077:7077"  # Spark Master Port
+    environment:
+      - SPARK_MASTER_HOST=0.0.0.0
+      - SPARK_HOME=/opt/spark
+      - HADOOP_CONF_DIR=/opt/hadoop/etc/hadoop
+    volumes:
+      - ./spark/app:/app 
+      - spark_data:/spark
+    entrypoint: ["/entrypoint.sh"]
+    networks:
+      - hadoop-net
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.1
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    networks:
+      - hadoop-net
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.10.1
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5601:5601"
+    networks:
+      - hadoop-net
+  
   # Service PostgreSQL
   postgres:
     image: postgres:15
@@ -39,37 +115,27 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - bigdata_network
-
-  # Service Elasticsearch
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
-      - "xpack.security.enabled=false" # Désactiver la sécurité pour simplifier le développement
-    ports:
-      - "9200:9200"  # API Elasticsearch
-      - "9300:9300"  # Node communication
+      - hadoop-net
 
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com  # Email de connexion à pgAdmin
-      PGADMIN_DEFAULT_PASSWORD: admin          # Mot de passe de connexion
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
     ports:
-      - "5050:80"  # Accès à pgAdmin via localhost:5050
+      - "5050:80"
     depends_on:
       - postgres
     networks:
-      - bigdata_network
-
-
-networks:
-  bigdata_network:
+      - hadoop-net
 
 volumes:
   namenode_data:
-  datanode_data:
+  datanode1_data:
+  datanode2_data:
+  spark_data:
   postgres_data:
+
+networks:
+  hadoop-net:
