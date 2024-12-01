@@ -15,6 +15,7 @@ npm install chart.js react-chartjs-2
 
 
 migration
-alembic revision --autogenerate -m "Initial migration"
-alembic upgrade head
+docker exec -it fastapi alembic revision --autogenerate -m "Initial migration"
+docker exec -it <nom_du_conteneur> alembic upgrade head
+
 

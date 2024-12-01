@@ -1,28 +1,31 @@
-from pyspark.sql import SparkSession
+# type: ignore
 
-def main():
-    # Créez une session Spark
-    spark = SparkSession.builder \
-        .appName('Test Spark Submit') \
-        .getOrCreate()
 
-    # Chargez le fichier CSV
-    inputfile = 'testdata.csv'
-    outputpath = 'output'
+from pyspark.sql import SparkSession 
+from pyspark.sql.functions import col, to_date
 
-    df = spark.read.option('header', 'true').csv(inputfile)
+# Initialisation de la session Spark
+spark = SparkSession.builder \
+    .appName("MeteoDataProcessing") \
+    .getOrCreate()
 
-    # Transformation : comptez les occurrences par valeur
-    result = df.groupBy('value').count()
+# Chargement des fichiers CSV depuis HDFS
+df = spark.read.csv("hdfs://data/*.csv", header=True, inferSchema=True)
 
-    # Affichez les résultats dans la console
-    result.show()
+# Suppression des lignes avec valeurs manquantes
+df_cleaned = df.dropna()
 
-    # Sauvegardez les résultats dans un fichier (format CSV)
-    result.write.mode('overwrite').csv(outputpath)
+# Formatage des dates
+df_cleaned = df_cleaned.withColumn("DATE", to_date(col("DATE"), "yyyy-MM-dd"))
 
-    # Arrêtez la session Spark
-    spark.stop()
+# Suppression des doublons
+df_cleaned = df_cleaned.dropDuplicates()
 
-if __name__ == '__main__':
-    main()
+# Conversion de la température de Fahrenheit en Celsius
+df_cleaned = df_cleaned.withColumn("TEMP_C", (col("TEMP") - 32) * 5 / 9)
+
+# Enregistrement des résultats dans Hive
+df_aggregated.write.mode("overwrite").saveAsTable("meteo_aggregated_data")
+
+# Arrêt la session Spark pour libérer les ressources
+spark.stop()
